@@ -1,8 +1,11 @@
 ---
 ansible_connection: ssh
-ansible_user: root
+ansible_user: k8s-admin
 ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
 ansible_ssh_private_key_file: "{{ ssh_private_key }}"
+# Enable privilege escalation for non-root user
+ansible_become: yes
+ansible_become_method: sudo
 
 ssh_private_key: "~/.ssh/id_rsa"
 
