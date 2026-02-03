@@ -343,6 +343,17 @@ func (d *deployer) Up() error {
 
 	// Add-in the extra-vars set to the final set.
 	maps.Insert(combinedAnsibleVars, maps.All(d.ExtraVars))
+
+	// For VPC deployments, override ansible_user to k8s-admin since IBM Cloud
+	// has disabled root SSH access for new VPC-VSI instances.
+	// Extra-vars have the highest precedence in Ansible, so this overrides
+	// the ansible_user: root in group_vars/all (shared with PowerVS).
+	if d.TargetProvider == "vpc" {
+		combinedAnsibleVars["ansible_user"] = "k8s-admin"
+		combinedAnsibleVars["ansible_become"] = "true"
+		combinedAnsibleVars["ansible_become_method"] = "sudo"
+	}
+
 	klog.Infof("Updated ansible variables with extra vars: %+v", combinedAnsibleVars)
 	if err = ansible.Playbook(d.tmpDir, filepath.Join(d.tmpDir, "hosts"), d.Playbook, combinedAnsibleVars); err != nil {
 		return fmt.Errorf("failed to run ansible playbook: %v", err)
