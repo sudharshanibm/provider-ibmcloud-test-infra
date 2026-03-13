@@ -51,8 +51,19 @@ checkout_account(){
     elif [[ ${status_code} == 200 ]]; then
         export BOSKOS_RESOURCE_NAME=$(echo ${output} | jq -r '.name')
         export BOSKOS_REGION=$(echo ${output} | jq -r '.userdata["region"]')
-        export BOSKOS_RESOURCE_ID=$(echo ${output} | jq -r '.userdata["service-instance-id"]')
         export BOSKOS_ZONE=$(echo ${output} | jq -r '.userdata["zone"]')
+        
+        # PowerVS specific fields
+        if [[ ${resource_type} == "powervs" ]]; then
+            export BOSKOS_RESOURCE_ID=$(echo ${output} | jq -r '.userdata["service-instance-id"]')
+        fi
+        
+        # VPC specific fields for s390x
+        if [[ ${resource_type} == "vpc-service" ]]; then
+            export BOSKOS_RESOURCE_GROUP=$(echo ${output} | jq -r '.userdata["resource-group-name"]')
+            export BOSKOS_SUBNET_NAME=$(echo ${output} | jq -r '.userdata["subnet-name"]')
+            export BOSKOS_SUBNET_ID=$(echo ${output} | jq -r '.userdata["subnet-id"]')
+        fi
     else
         error "Failed to acquire free resource of type ${RESOURCE_TYPE} due to invalid response, status code : ${status_code}"
     fi
@@ -67,6 +78,32 @@ heartbeat_account(){
         if [[ ${status_code} != 200 ]]; then
             error "Heart beat to resource '${BOSKOS_RESOURCE_NAME}' failed due to invalid response, status code: ${status_code}"
         fi
+# Support for s390x VPC without Boskos
+# If BOSKOS_HOST is not set but VPC variables are provided, use direct configuration
+if [ -z "${BOSKOS_HOST:-}" ]; then
+    echo "Boskos host is not set. Using direct VPC configuration for s390x."
+    
+    # For s390x: Use environment variables directly
+    # These should be set via preset-ibmcloud-cred-z in the job
+    export BOSKOS_RESOURCE_NAME="${VPC_NAME:-k8s-s390x-test-vpc}"
+    export BOSKOS_REGION="${VPC_REGION:-eu-de}"
+    export BOSKOS_ZONE="${VPC_ZONE:-eu-de-1}"
+    export BOSKOS_RESOURCE_GROUP="${VPC_RESOURCE_GROUP:-rg-conformance-test}"
+    export BOSKOS_SUBNET_NAME="${VPC_SUBNET_NAME:-k8s-s390x-test-subnet}"
+    export BOSKOS_SUBNET_ID="${VPC_SUBNET_ID:-02b7-a9d48a4a-6328-44cc-8ccc-51453c86674c}"
+    
+    # Define no-op release function for s390x (no Boskos to release to)
+    release_account() {
+        echo "Skipping Boskos release (not using Boskos for s390x)"
+    }
+    
+    # No heartbeat needed for s390x
+    HEART_BEAT_PID=""
+    
+    echo "Using direct VPC configuration: ${BOSKOS_RESOURCE_NAME} in ${BOSKOS_REGION}/${BOSKOS_ZONE}"
+    exit 0
+fi
+
         count=$(( $count + 1 ))
         echo "Resource ${BOSKOS_RESOURCE_NAME} of type ${RESOURCE_TYPE} is currently being used by ${USER}"
         sleep 60
