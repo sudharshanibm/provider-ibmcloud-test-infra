@@ -80,32 +80,63 @@ module "workers" {
 resource "null_resource" "wait-for-master-completes" {
   depends_on = [module.master]
   
-  # First wait for cloud-init to complete using root user (still available during boot)
+  # Wait for cloud-init to complete, trying multiple SSH users
   provisioner "local-exec" {
     command = <<-EOT
       max_attempts=60
       attempt=0
+      host="${module.master.public_ip}"
+      ssh_key="${var.ssh_private_key}"
+      
+      echo "=== Attempting SSH to master at $host ==="
+      echo "=== SSH key: $ssh_key ==="
+      
       while [ $attempt -lt $max_attempts ]; do
-        # Try k8s-admin first (root SSH is disabled on new IBM Cloud VPC-VSIs)
-        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 \
-               -i ${var.ssh_private_key} k8s-admin@${module.master.public_ip} \
-               "sudo cloud-init status --wait" 2>/dev/null; then
+        attempt=$((attempt + 1))
+        
+        # Use verbose SSH on first attempt for diagnostics
+        if [ $attempt -eq 1 ]; then
+          echo "=== First attempt - verbose SSH for diagnostics ==="
+          ssh -v -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+              -i "$ssh_key" k8s-admin@"$host" "echo SSH_OK" 2>&1 || true
+          echo "=== End verbose diagnostics ==="
+        fi
+
+        # Try k8s-admin (cloud-init created user)
+        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+               -i "$ssh_key" k8s-admin@"$host" \
+               "sudo cloud-init status --wait" 2>&1; then
           echo "Cloud-init completed on master (via k8s-admin)"
           break
         fi
-        # Fallback to root for older images that still have root SSH enabled
-        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 \
-               -i ${var.ssh_private_key} root@${module.master.public_ip} \
-               "cloud-init status --wait" 2>/dev/null; then
+
+        # Try ubuntu (IBM Cloud default user on Ubuntu images)
+        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+               -i "$ssh_key" ubuntu@"$host" \
+               "sudo cloud-init status --wait" 2>&1; then
+          echo "Cloud-init completed on master (via ubuntu)"
+          break
+        fi
+
+        # Fallback to root for older images
+        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+               -i "$ssh_key" root@"$host" \
+               "cloud-init status --wait" 2>&1; then
           echo "Cloud-init completed on master (via root)"
           break
         fi
-        attempt=$((attempt + 1))
+
         echo "Waiting for cloud-init on master (attempt $attempt/$max_attempts)..."
         sleep 10
       done
       if [ $attempt -eq $max_attempts ]; then
-        echo "ERROR: Timed out waiting for cloud-init on master"
+        echo "ERROR: Timed out waiting for cloud-init on master after $max_attempts attempts"
+        echo "=== Final diagnostic: trying all users with verbose ==="
+        for user in k8s-admin ubuntu root; do
+          echo "--- Trying $user ---"
+          ssh -v -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+              -i "$ssh_key" "$user"@"$host" "echo SUCCESS" 2>&1 || true
+        done
         exit 1
       fi
     EOT
@@ -130,7 +161,7 @@ resource "null_resource" "wait-for-workers-completes" {
   count      = var.workers_count
   depends_on = [module.workers]
   
-  # First wait for cloud-init to complete using root user (still available during boot)
+  # Wait for cloud-init to complete, trying multiple SSH users
   provisioner "local-exec" {
     command = <<-EOT
       max_attempts=60
@@ -139,27 +170,54 @@ resource "null_resource" "wait-for-workers-completes" {
       worker_index="${count.index}"
       ssh_key="${var.ssh_private_key}"
       
+      echo "=== Attempting SSH to worker $worker_index at $worker_ip ==="
+      
       while [ $attempt -lt $max_attempts ]; do
-        # Try k8s-admin first (root SSH is disabled on new IBM Cloud VPC-VSIs)
-        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 \
+        attempt=$((attempt + 1))
+
+        # Use verbose SSH on first attempt for diagnostics
+        if [ $attempt -eq 1 ]; then
+          echo "=== First attempt - verbose SSH for diagnostics ==="
+          ssh -v -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+              -i "$ssh_key" k8s-admin@"$worker_ip" "echo SSH_OK" 2>&1 || true
+          echo "=== End verbose diagnostics ==="
+        fi
+
+        # Try k8s-admin (cloud-init created user)
+        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
                -i "$ssh_key" k8s-admin@"$worker_ip" \
-               "sudo cloud-init status --wait" 2>/dev/null; then
+               "sudo cloud-init status --wait" 2>&1; then
           echo "Cloud-init completed on worker $worker_index (via k8s-admin)"
           break
         fi
-        # Fallback to root for older images that still have root SSH enabled
-        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 \
+
+        # Try ubuntu (IBM Cloud default user on Ubuntu images)
+        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+               -i "$ssh_key" ubuntu@"$worker_ip" \
+               "sudo cloud-init status --wait" 2>&1; then
+          echo "Cloud-init completed on worker $worker_index (via ubuntu)"
+          break
+        fi
+
+        # Fallback to root for older images
+        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
                -i "$ssh_key" root@"$worker_ip" \
-               "cloud-init status --wait" 2>/dev/null; then
+               "cloud-init status --wait" 2>&1; then
           echo "Cloud-init completed on worker $worker_index (via root)"
           break
         fi
-        attempt=$((attempt + 1))
+
         echo "Waiting for cloud-init on worker $worker_index (attempt $attempt/$max_attempts)..."
         sleep 10
       done
       if [ $attempt -eq $max_attempts ]; then
         echo "ERROR: Timed out waiting for cloud-init on worker $worker_index"
+        echo "=== Final diagnostic: trying all users with verbose ==="
+        for user in k8s-admin ubuntu root; do
+          echo "--- Trying $user ---"
+          ssh -v -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+              -i "$ssh_key" "$user"@"$worker_ip" "echo SUCCESS" 2>&1 || true
+        done
         exit 1
       fi
     EOT
