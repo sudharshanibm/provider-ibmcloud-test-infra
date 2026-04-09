@@ -11,11 +11,12 @@ data "ibm_is_ssh_key" "ssh_key" {
 }
 
 module "vpc" {
-  source         = "./vpc-instance"
-  vpc_name       = var.vpc_name
-  cluster_name   = var.cluster_name
-  zone           = var.vpc_zone
-  resource_group = data.ibm_resource_group.default_group.id
+  source          = "./vpc-instance"
+  vpc_name        = var.vpc_name
+  vpc_subnet_name = var.vpc_subnet_name
+  cluster_name    = var.cluster_name
+  zone            = var.vpc_zone
+  resource_group  = data.ibm_resource_group.default_group.id
 }
 
 locals {
@@ -80,7 +81,7 @@ module "workers" {
 resource "null_resource" "wait-for-master-completes" {
   depends_on = [module.master]
   
-  # Wait for cloud-init to complete, trying multiple SSH users
+  # First wait for cloud-init to complete using root user (still available during boot)
   provisioner "local-exec" {
     command = <<-EOT
       max_attempts=60
@@ -141,7 +142,7 @@ resource "null_resource" "wait-for-master-completes" {
       fi
     EOT
   }
-  
+
   # Then verify k8s-admin user is accessible
   connection {
     type        = "ssh"
@@ -161,7 +162,7 @@ resource "null_resource" "wait-for-workers-completes" {
   count      = var.workers_count
   depends_on = [module.workers]
   
-  # Wait for cloud-init to complete, trying multiple SSH users
+  # First wait for cloud-init to complete using root user (still available during boot)
   provisioner "local-exec" {
     command = <<-EOT
       max_attempts=60
@@ -222,7 +223,7 @@ resource "null_resource" "wait-for-workers-completes" {
       fi
     EOT
   }
-  
+
   # Then verify k8s-admin user is accessible
   connection {
     type        = "ssh"

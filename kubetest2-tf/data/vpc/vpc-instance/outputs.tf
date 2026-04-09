@@ -3,7 +3,7 @@ output "vpc_id" {
 }
 
 output "subnet_id" {
-  value = ibm_is_subnet.primary.id
+  value = local.subnet_id
 }
 
 output "security_group_id" {
