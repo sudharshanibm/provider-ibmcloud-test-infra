@@ -80,7 +80,7 @@ module "workers" {
 
 resource "null_resource" "wait-for-master-completes" {
   depends_on = [module.master]
-  
+
   # First wait for cloud-init to complete using root user (still available during boot)
   provisioner "local-exec" {
     command = <<-EOT
@@ -161,7 +161,7 @@ resource "null_resource" "wait-for-master-completes" {
 resource "null_resource" "wait-for-workers-completes" {
   count      = var.workers_count
   depends_on = [module.workers]
-  
+
   # First wait for cloud-init to complete using root user (still available during boot)
   provisioner "local-exec" {
     command = <<-EOT
