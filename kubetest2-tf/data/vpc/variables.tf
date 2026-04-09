@@ -16,13 +16,8 @@ variable "vpc_name" {
 
 variable "vpc_subnet_name" {
   type        = string
-  description = "Specify existing subnet name. If none is provided, it will create a new subnet named {cluster_name}-subnet. This must be set when reusing an existing VPC."
+  description = "Specify existing subnet name. If none is provided, it will create a new subnet named {cluster_name}-subnet."
   default     = ""
-
-  validation {
-    condition     = var.vpc_name == "" || var.vpc_subnet_name != ""
-    error_message = "vpc_subnet_name must be set when vpc_name is provided."
-  }
 }
 
 variable "node_image" {
