@@ -11,8 +11,14 @@ resource "ibm_is_vpc" "vpc" {
 }
 
 locals {
-  vpc_id          = var.vpc_name != "" ? data.ibm_is_vpc.existing_vpc[0].id : ibm_is_vpc.vpc[0].id
-  security_group  = var.vpc_name != "" ? data.ibm_is_vpc.existing_vpc[0].default_security_group : ibm_is_vpc.vpc[0].default_security_group
+  vpc_id         = var.vpc_name != "" ? data.ibm_is_vpc.existing_vpc[0].id : ibm_is_vpc.vpc[0].id
+  security_group = ibm_is_security_group.primary.id
+}
+
+resource "ibm_is_security_group" "primary" {
+  name           = "${var.cluster_name}-security-group"
+  vpc            = local.vpc_id
+  resource_group = var.resource_group
 }
 
 resource "ibm_is_floating_ip" "gateway" {
