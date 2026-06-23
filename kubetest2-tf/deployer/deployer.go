@@ -147,7 +147,11 @@ func (d *deployer) initialize() error {
 		needBoskos := false
 		switch d.TargetProvider {
 		case "vpc":
-			needBoskos = vpc.VPCProvider.Region == "" || vpc.VPCProvider.Zone == "" || vpc.VPCProvider.ResourceGroup == ""
+			// Region and zone are the signal that Boskos must supply the VPC
+			// resources (region, zone, resource group ID and VPC). The resource
+			// group is acquired together with them, so it is not part of the
+			// condition.
+			needBoskos = vpc.VPCProvider.Region == "" || vpc.VPCProvider.Zone == ""
 		case "powervs":
 			needBoskos = powervs.PowerVSProvider.Zone == "" || powervs.PowerVSProvider.Region == "" || powervs.PowerVSProvider.ServiceID == ""
 		}
@@ -179,13 +183,8 @@ func (d *deployer) initialize() error {
 			case "vpc":
 				vpc.VPCProvider.Region = d.BoskosResourceUserData["region"]
 				vpc.VPCProvider.Zone = d.BoskosResourceUserData["zone"]
-				if rgName := d.BoskosResourceUserData["resource-group-name"]; rgName != "" {
-					vpc.VPCProvider.ResourceGroup = rgName
-				} else {
-					vpc.VPCProvider.ResourceGroup = d.BoskosResourceUserData["resource-group"]
-				}
+				vpc.VPCProvider.ResourceGroup = d.BoskosResourceUserData["resource-group"]
 				vpc.VPCProvider.VPCName = d.BoskosResourceUserData["vpc-name"]
-				vpc.VPCProvider.SubnetName = d.BoskosResourceUserData["subnet-name"]
 
 			case "powervs":
 				powervs.PowerVSProvider.Zone = d.BoskosResourceUserData["zone"]
