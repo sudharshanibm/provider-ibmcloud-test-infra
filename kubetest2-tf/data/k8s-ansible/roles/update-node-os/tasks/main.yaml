@@ -25,21 +25,12 @@
 - name: Update apt cache
   apt:
     update_cache: yes
-  when:
-    - ansible_facts['architecture'] != 's390x'
-    - ansible_facts['pkg_mgr'] == 'apt'
-
-- name: Update apt cache on s390x
-  apt:
-    update_cache: yes
-    lock_timeout: 600
+    lock_timeout: "{{ 600 if ansible_facts['architecture'] == 's390x' else omit }}"
   register: apt_cache_update_result
-  retries: 3
-  delay: 30
+  retries: "{{ 3 if ansible_facts['architecture'] == 's390x' else 1 }}"
+  delay: "{{ 30 if ansible_facts['architecture'] == 's390x' else 5 }}"
   until: apt_cache_update_result is succeeded
-  when:
-    - ansible_facts['architecture'] == 's390x'
-    - ansible_facts['pkg_mgr'] == 'apt'
+  when: ansible_facts['pkg_mgr'] == 'apt'
 
 - name: Check if kernel-modules-extra is installed
   package_facts:
