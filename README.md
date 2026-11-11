@@ -40,3 +40,10 @@ Participation in the Kubernetes community is governed by the [Kubernetes Code of
 
 [owners]: https://git.k8s.io/community/contributors/guide/owners.md
 [Creative Commons 4.0]: https://git.k8s.io/website/LICENSE
+
+## Existing s390x VPC CSI preparation
+
+For guarded node identity checks, existing host-storage preflight and retained PVC
+validation, see [the VPC CSI runbook](hack/prepare-vpc-csi-nodes.md). The default
+checks do not mutate the cluster. `make verify-vpc-csi-tools` runs offline safety
+tests; the general cluster bootstrap playbooks are not required for day-two CSI.

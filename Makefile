@@ -52,3 +52,8 @@ push-to-cos:
 # secret-manager targets
 build-secret-manager:
 	$(MAKE) -C secret-manager/ build
+
+# Offline safety checks; never provisions or removes cloud/Kubernetes resources.
+.PHONY: verify-vpc-csi-tools
+verify-vpc-csi-tools:
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s hack -p 'test_*vpc_csi*.py' -v
